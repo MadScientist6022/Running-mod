@@ -1,0 +1,910 @@
+diff -c Cataclysm-DDA-feb20/action.cpp Cataclysm-DDA-feb20modded/action.cpp
+*** Cataclysm-DDA-feb20/action.cpp	2013-02-24 17:20:26.188761782 -0600
+--- Cataclysm-DDA-feb20modded/action.cpp	2013-02-25 14:30:27.247733725 -0600
+***************
+*** 129,134 ****
+--- 129,138 ----
+     return "shift_w";
+    case ACTION_SHIFT_NW:
+     return "shift_nw";
++   case ACTION_PLUS_SPEED:
++    return "increase_your_speed";
++   case ACTION_MINUS_SPEED:
++    return "decrease_your_speed"; 
+    case ACTION_OPEN:
+     return "open";
+    case ACTION_CLOSE:
+***************
+*** 287,292 ****
+--- 291,300 ----
+     return "Move View West";
+    case ACTION_SHIFT_NW:
+     return "Move View Northwest";
++   case ACTION_PLUS_SPEED:
++    return "Increase Your Speed";
++   case ACTION_MINUS_SPEED:
++    return "Decrease Your Speed";
+    case ACTION_OPEN:
+     return "Open Door";
+    case ACTION_CLOSE:
+***************
+*** 300,306 ****
+    case ACTION_BUTCHER:
+     return "Butcher";
+    case ACTION_CHAT:
+!    return "Chat with NPC";
+    case ACTION_LOOK:
+     return "Look Around";
+    case ACTION_PEEK:
+--- 308,314 ----
+    case ACTION_BUTCHER:
+     return "Butcher";
+    case ACTION_CHAT:
+!  return "Chat with NPC";
+    case ACTION_LOOK:
+     return "Look Around";
+    case ACTION_PEEK:
+Only in Cataclysm-DDA-feb20modded/: action.cpp~
+diff -c Cataclysm-DDA-feb20/action.h Cataclysm-DDA-feb20modded/action.h
+*** Cataclysm-DDA-feb20/action.h	2013-02-24 17:20:25.948761793 -0600
+--- Cataclysm-DDA-feb20modded/action.h	2013-02-25 13:28:53.167554940 -0600
+***************
+*** 25,30 ****
+--- 25,32 ----
+  ACTION_SHIFT_SW,
+  ACTION_SHIFT_W,
+  ACTION_SHIFT_NW,
++ ACTION_PLUS_SPEED,
++ ACTION_MINUS_SPEED,
+  // Environment Interaction
+  ACTION_OPEN,
+  ACTION_CLOSE,
+Only in Cataclysm-DDA-feb20modded/: action.h~
+Binary files Cataclysm-DDA-feb20/cataclysm and Cataclysm-DDA-feb20modded/cataclysm differ
+Common subdirectories: Cataclysm-DDA-feb20/code_doc and Cataclysm-DDA-feb20modded/code_doc
+Common subdirectories: Cataclysm-DDA-feb20/data and Cataclysm-DDA-feb20modded/data
+Common subdirectories: Cataclysm-DDA-feb20/.deps and Cataclysm-DDA-feb20modded/.deps
+Only in Cataclysm-DDA-feb20modded/: diffs
+Only in Cataclysm-DDA-feb20modded/: #diffs#
+diff -c Cataclysm-DDA-feb20/game.cpp Cataclysm-DDA-feb20modded/game.cpp
+*** Cataclysm-DDA-feb20/game.cpp	2013-02-24 17:20:26.084761787 -0600
+--- Cataclysm-DDA-feb20modded/game.cpp	2013-02-27 11:11:20.797347090 -0600
+***************
+*** 527,532 ****
+--- 527,533 ----
+   u.per_cur = u.per_max;
+   u.int_cur = u.int_max;
+   u.dex_cur = u.dex_max;
++  u.sta_cur = u.sta_max;
+   nextspawn = int(turn);
+   temperature = 65; // Springtime-appropriate?
+  
+***************
+*** 603,608 ****
+--- 604,626 ----
+    }
+    return true;
+   }
++ 
++ 
++  u.tired -= u.recovery_rate(0);
++  if (u.tired < 0) u.tired = 0; 
++  u.sta_xp += (u.running_intensity);
++  if (u.sta_xp >= u.sta_xp_plus(u.sta_max))
++  {
++    u.sta_xp -= u.sta_xp_plus(u.sta_max);
++    u.sta_max += 1;
++    u.sta_cur += 1;
++  } else if (u.sta_xp <= -u.sta_xp_plus(u.sta_max - 1)) {
++    u.sta_xp += u.sta_xp_plus(u.sta_max - 1);
++    u.sta_max -= 1;
++    u.sta_cur -= 1;
++  }
++ 
++ 
+  // Actual stuff
+   gamemode->per_turn(this);
+   turn.increment();
+***************
+*** 1513,1518 ****
+--- 1531,1546 ----
+     u.view_offset_x += -1;
+     u.view_offset_y += -1;
+     break;
++   
++   case ACTION_PLUS_SPEED:
++    u.running_intensity += u.step_rate;
++    if (u.running_intensity >= 100) u.running_intensity = 100;
++    break;
++  
++   case ACTION_MINUS_SPEED:
++    u.running_intensity -= u.step_rate;
++    if (u.running_intensity <= u.step_rate) u.running_intensity = u.step_rate;
++    break; 
+  
+    case ACTION_OPEN:
+     open();
+***************
+*** 7111,7116 ****
+--- 7139,7156 ----
+  
+  // Calculate cost of moving
+    u.moves -= u.run_cost(m.move_cost(x, y) * 50);
++   u.tired += (float)u.running_tired_increase();
++ 
++ //pain penalty for running at limit
++   if (u.tired / u.max_tired() > .9){
++     if (u.running_pain_counter > u.running_pain_counter_turnover) {
++        u.pain += 1;
++        u.running_pain_counter = 0;
++     } else {
++       u.running_pain_counter += 1;
++     }
++   }
++ 
+  
+  // Adjust recoil down
+    if (u.recoil > 0) {
+Only in Cataclysm-DDA-feb20modded/: game.cpp~
+diff -c Cataclysm-DDA-feb20/keypress.cpp Cataclysm-DDA-feb20modded/keypress.cpp
+*** Cataclysm-DDA-feb20/keypress.cpp	2013-02-24 17:20:23.836761890 -0600
+--- Cataclysm-DDA-feb20modded/keypress.cpp	2013-02-25 14:19:51.707702963 -0600
+***************
+*** 201,206 ****
+--- 201,208 ----
+  shift_e    L\n\
+  shift_s    J\n\
+  shift_w    H\n\
++ increase_your_speed +\n\
++ decrease_your_speed -\n\
+  \n\
+  # ENVIRONMENT INTERACTION\n\
+  open  o\n\
+Only in Cataclysm-DDA-feb20modded/: keypress.cpp~
+diff -c Cataclysm-DDA-feb20/newcharacter.cpp Cataclysm-DDA-feb20modded/newcharacter.cpp
+*** Cataclysm-DDA-feb20/newcharacter.cpp	2013-02-24 17:20:32.732761484 -0600
+--- Cataclysm-DDA-feb20modded/newcharacter.cpp	2013-02-26 10:04:21.463317518 -0600
+***************
+*** 59,65 ****
+      dex_max = rng(6, 12);
+      int_max = rng(6, 12);
+      per_max = rng(6, 12);
+!     points = points - str_max - dex_max - int_max - per_max;
+      if (str_max > HIGH_STAT)
+       points -= (str_max - HIGH_STAT);
+      if (dex_max > HIGH_STAT)
+--- 59,66 ----
+      dex_max = rng(6, 12);
+      int_max = rng(6, 12);
+      per_max = rng(6, 12);
+!     sta_max = rng(6, 12);
+!     points = points - str_max - dex_max - int_max - per_max - sta_max;
+      if (str_max > HIGH_STAT)
+       points -= (str_max - HIGH_STAT);
+      if (dex_max > HIGH_STAT)
+***************
+*** 84,94 ****
+         num_btraits -= traits[rn].points;
+        }
+       } else {
+!       switch (rng(1, 4)) {
+         case 1: if (str_max > 5) { str_max--; points++; } break;
+         case 2: if (dex_max > 5) { dex_max--; points++; } break;
+         case 3: if (int_max > 5) { int_max--; points++; } break;
+         case 4: if (per_max > 5) { per_max--; points++; } break;
+        }
+       }
+      }
+--- 85,96 ----
+         num_btraits -= traits[rn].points;
+        }
+       } else {
+!       switch (rng(1, 5)) {
+         case 1: if (str_max > 5) { str_max--; points++; } break;
+         case 2: if (dex_max > 5) { dex_max--; points++; } break;
+         case 3: if (int_max > 5) { int_max--; points++; } break;
+         case 4: if (per_max > 5) { per_max--; points++; } break;
++        case 5: if (sta_max > 5) { sta_max--; points++; } break;
+        }
+       }
+      }
+***************
+*** 112,117 ****
+--- 114,120 ----
+         case 2: if (dex_max < HIGH_STAT) { dex_max++; points--; } break;
+         case 3: if (int_max < HIGH_STAT) { int_max++; points--; } break;
+         case 4: if (per_max < HIGH_STAT) { per_max++; points--; } break;
++        case 5: if (sta_max < HIGH_STAT) { sta_max++; points--; } break;
+        }
+        break;
+       case 6:
+***************
+*** 333,338 ****
+--- 336,342 ----
+     mvwprintz(w, 7,  2, c_ltgray,     "Dexterity:    %d  ", u->dex_max);
+     mvwprintz(w, 8,  2, c_ltgray,     "Intelligence: %d  ", u->int_max);
+     mvwprintz(w, 9,  2, c_ltgray,     "Perception:   %d  ", u->per_max);
++    mvwprintz(w, 10, 2, c_ltgray,     "Stamina:      %d  ", u->sta_max);
+     mvwprintz(w, 6, 33, COL_STAT_ACT, "Base HP: %d                                 ",
+               calc_HP(u->str_max, u->has_trait(PF_TOUGH)));
+     mvwprintz(w, 7, 33, COL_STAT_ACT, "Carry weight: %d lbs                        ",
+***************
+*** 353,358 ****
+--- 357,363 ----
+     mvwprintz(w, 7,  2, COL_STAT_ACT, "Dexterity:    %d  ", u->dex_max);
+     mvwprintz(w, 8,  2, c_ltgray,     "Intelligence: %d  ", u->int_max);
+     mvwprintz(w, 9,  2, c_ltgray,     "Perception:   %d  ", u->per_max);
++    mvwprintz(w, 10, 2, c_ltgray,     "Stamina:      %d  ", u->sta_max);
+     mvwprintz(w, 6, 33, COL_STAT_ACT, "Melee to-hit bonus: +%d                      ",
+               u->base_to_hit(false));
+     mvwprintz(w, 7, 33, COL_STAT_ACT, "                                            ");
+***************
+*** 379,384 ****
+--- 384,390 ----
+     mvwprintz(w, 7,  2, c_ltgray,     "Dexterity:    %d  ", u->dex_max);
+     mvwprintz(w, 8,  2, COL_STAT_ACT, "Intelligence: %d  ", u->int_max);
+     mvwprintz(w, 9,  2, c_ltgray,     "Perception:   %d  ", u->per_max);
++    mvwprintz(w, 10, 2, c_ltgray,     "Stamina:      %d  ", u->sta_max);
+     mvwprintz(w, 6, 33, COL_STAT_ACT, "Skill comprehension: %d%%%%                     ",
+               u->skillLevel("melee").comprehension(u->int_max));
+     mvwprintz(w, 7, 33, COL_STAT_ACT, "Read times: %d%%%%                              ",
+***************
+*** 398,403 ****
+--- 404,410 ----
+     mvwprintz(w, 7,  2, c_ltgray,     "Dexterity:    %d  ", u->dex_max);
+     mvwprintz(w, 8,  2, c_ltgray,     "Intelligence: %d  ", u->int_max);
+     mvwprintz(w, 9,  2, COL_STAT_ACT, "Perception:   %d  ", u->per_max);
++    mvwprintz(w, 10, 2, c_ltgray,     "Stamina:      %d  ", u->sta_max);
+     mvwprintz(w, 6, 33, COL_STAT_ACT, "                                            ");
+     mvwprintz(w, 6, 33, COL_STAT_ACT, "Ranged %s: %s%d",
+               (u->ranged_per_mod(false) <= 0 ? "bonus" : "penalty"),
+***************
+*** 409,419 ****
+     mvwprintz(w,10, 33, COL_STAT_ACT, "                                            ");
+     mvwprintz(w,11, 33, COL_STAT_ACT, "                                            ");
+     break;
+    }
+  
+    wrefresh(w);
+    ch = input();
+!   if (ch == 'j' && sel < 4)
+     sel++;
+    if (ch == 'k' && sel > 1)
+     sel--;
+--- 416,444 ----
+     mvwprintz(w,10, 33, COL_STAT_ACT, "                                            ");
+     mvwprintz(w,11, 33, COL_STAT_ACT, "                                            ");
+     break;
++  case 5:
++    if (u->per_max >= HIGH_STAT)
++     mvwprintz(w, 3, 33, c_ltred, "Increasing Sta further costs 2 points.");
++    else
++     mvwprintz(w, 3, 33, c_black, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx");
++    mvwprintz(w, 6,  2, c_ltgray,     "Strength:     %d  ", u->str_max);
++    mvwprintz(w, 7,  2, c_ltgray,     "Dexterity:    %d  ", u->dex_max);
++    mvwprintz(w, 8,  2, c_ltgray,     "Intelligence: %d  ", u->int_max);
++    mvwprintz(w, 9,  2, c_ltgray, "Perception:   %d  ", u->per_max);
++    mvwprintz(w, 10, 2, COL_STAT_ACT,     "Stamina:      %d  ", u->sta_max);
++    mvwprintz(w, 6, 33, COL_STAT_ACT, "                                            ");
++    mvwprintz(w, 7, 33, COL_STAT_ACT, "  Stamina is used for running and      ");
++    mvwprintz(w, 8, 33, COL_STAT_ACT, "  Fighting without tiring out(NYFI)         ");
++    mvwprintz(w, 9, 33, COL_STAT_ACT, "                                            ");
++    mvwprintz(w,10, 33, COL_STAT_ACT, "                                            ");
++    mvwprintz(w,11, 33, COL_STAT_ACT, "                                            ");
++    break;
++ 
+    }
+  
+    wrefresh(w);
+    ch = input();
+!   if (ch == 'j' && sel < 5)
+     sel++;
+    if (ch == 'k' && sel > 1)
+     sel--;
+***************
+*** 438,443 ****
+--- 463,473 ----
+       points++;
+      u->per_max--;
+      points++;
++    } else if (sel == 5 && u->sta_max > 4) {
++     if (u->sta_max > HIGH_STAT)
++      points++;
++     u->sta_max--;
++     points++;
+     }
+    }
+    if (ch == 'l' && points > 0) {
+***************
+*** 464,469 ****
+--- 494,505 ----
+      if (u->per_max >= HIGH_STAT)
+       points--;
+      u->per_max++;
++    } else if (sel == 5 && u->sta_max < 20 &&
++               (u->sta_max < HIGH_STAT || points > 1)) {
++     points--;
++     if (u->sta_max >= HIGH_STAT)
++      points--;
++     u->sta_max++;
+     }
+    }
+    if (ch == '<' && query_yn("Return to main menu?"))
+Only in Cataclysm-DDA-feb20modded/: newcharacter.cpp~
+diff -c Cataclysm-DDA-feb20/npc.cpp Cataclysm-DDA-feb20modded/npc.cpp
+*** Cataclysm-DDA-feb20/npc.cpp	2013-02-24 17:20:32.820761478 -0600
+--- Cataclysm-DDA-feb20modded/npc.cpp	2013-02-25 15:44:46.395949533 -0600
+***************
+*** 41,46 ****
+--- 41,47 ----
+   dex_max = 0;
+   int_max = 0;
+   per_max = 0;
++  sta_max = 0;
+   my_fac = NULL;
+   marked_for_death = false;
+   dead = false;
+***************
+*** 140,149 ****
+  // The " || " is what tells npc::load_info() that it's down reading the name
+   dump << id << " " << name << " || " << posx << " " << posy << " " << str_cur <<
+           " " << str_max << " " << dex_cur << " " << dex_max << " " << int_cur <<
+!          " " << int_max << " " << per_cur << " " << per_max << " " << hunger <<
+!          " " << thirst << " " << fatigue << " " << stim << " " << pain << " " <<
+           pkill << " " <<  radiation << " " << cash << " " << recoil << " " <<
+!          scent << " " << moves << " " << underwater << " " << dodges_left <<
+           " " << oxygen << " " << (marked_for_death ? "1" : "0") << " " <<
+           (dead ? "1" : "0") << " " << myclass << " " << patience << " ";
+  
+--- 141,150 ----
+  // The " || " is what tells npc::load_info() that it's down reading the name
+   dump << id << " " << name << " || " << posx << " " << posy << " " << str_cur <<
+           " " << str_max << " " << dex_cur << " " << dex_max << " " << int_cur <<
+!    " " << int_max << " " << per_cur << " " << per_max << sta_cur << " " << sta_max << " " << hunger <<
+!    " " << thirst << " " << fatigue << " " << tired << " "  << stim << " " << pain << " " <<
+           pkill << " " <<  radiation << " " << cash << " " << recoil << " " <<
+!    scent << " " << running_intensity << " " << step_rate << " " << running_pain_counter << " " << running_pain_counter_turnover << " " <<  moves << " " << underwater << " " << dodges_left <<
+           " " << oxygen << " " << (marked_for_death ? "1" : "0") << " " <<
+           (dead ? "1" : "0") << " " << myclass << " " << patience << " ";
+  
+***************
+*** 221,229 ****
+   } while (tmpname != "||");
+   name = name.substr(0, name.size() - 1); // Strip off trailing " "
+   dump >> posx >> posy >> str_cur >> str_max >> dex_cur >> dex_max >>
+!          int_cur >> int_max >> per_cur >> per_max >> hunger >> thirst >>
+!          fatigue >> stim >> pain >> pkill >> radiation >> cash >> recoil >>
+!          scent >> moves >> underwater >> dodges_left >> oxygen >> deathtmp >>
+           deadtmp >> classtmp >> patience;
+  
+   if (deathtmp == 1)
+--- 222,230 ----
+   } while (tmpname != "||");
+   name = name.substr(0, name.size() - 1); // Strip off trailing " "
+   dump >> posx >> posy >> str_cur >> str_max >> dex_cur >> dex_max >>
+!    int_cur >> int_max >> per_cur >> per_max >> sta_cur >> sta_max >> hunger >> thirst >>
+!    fatigue >> tired >> stim >> pain >> pkill >> radiation >> cash >> recoil >>
+!    scent >> running_intensity >> step_rate >> running_pain_counter >> running_pain_counter_turnover >>  moves >> underwater >> dodges_left >> oxygen >> deathtmp >>
+           deadtmp >> classtmp >> patience;
+  
+   if (deathtmp == 1)
+***************
+*** 302,307 ****
+--- 303,309 ----
+   dex_max = dice(4, 3);
+   int_max = dice(4, 3);
+   per_max = dice(4, 3);
++  sta_max = dice(4, 3);
+   ret_null = item(g->itypes[0], 0);
+   weapon   = item(g->itypes[0], 0);
+   inv.clear();
+Only in Cataclysm-DDA-feb20modded/: npc.cpp~
+Common subdirectories: Cataclysm-DDA-feb20/obj and Cataclysm-DDA-feb20modded/obj
+diff -c Cataclysm-DDA-feb20/player.cpp Cataclysm-DDA-feb20modded/player.cpp
+*** Cataclysm-DDA-feb20/player.cpp	2013-02-24 17:20:23.896761887 -0600
+--- Cataclysm-DDA-feb20modded/player.cpp	2013-02-27 11:11:16.213346864 -0600
+***************
+*** 31,36 ****
+--- 31,39 ----
+   int_max = 8;
+   per_cur = 8;
+   per_max = 8;
++  sta_cur = 8;
++  sta_max = 8;
++  sta_xp = 0;
+   underwater = false;
+   dodges_left = 1;
+   blocks_left = 1;
+***************
+*** 39,44 ****
+--- 42,51 ----
+   hunger = 0;
+   thirst = 0;
+   fatigue = 0;
++  tired = 0;
++  running_intensity = 25;
++  running_pain_counter = 0;
++  running_pain_counter_turnover = 5;
+   stim = 0;
+   pain = 0;
+   pkill = 0;
+***************
+*** 125,135 ****
+   dex_cur = rhs.dex_cur;
+   int_cur = rhs.int_cur;
+   per_cur = rhs.per_cur;
+! 
+   str_max = rhs.str_max;
+   dex_max = rhs.dex_max;
+   int_max = rhs.int_max;
+   per_max = rhs.per_max;
+  
+   power_level = rhs.power_level;
+   max_power_level = rhs.max_power_level;
+--- 132,146 ----
+   dex_cur = rhs.dex_cur;
+   int_cur = rhs.int_cur;
+   per_cur = rhs.per_cur;
+!  sta_cur = rhs.sta_cur;
+!  
+   str_max = rhs.str_max;
+   dex_max = rhs.dex_max;
+   int_max = rhs.int_max;
+   per_max = rhs.per_max;
++  sta_max = rhs.sta_max;
++ 
++  sta_xp = rhs.sta_xp;
+  
+   power_level = rhs.power_level;
+   max_power_level = rhs.max_power_level;
+***************
+*** 138,143 ****
+--- 149,160 ----
+   thirst = rhs.thirst;
+   fatigue = rhs.fatigue;
+   health = rhs.health;
++  tired = rhs.tired;
++  
++  running_intensity = rhs.running_intensity;
++  step_rate = rhs.step_rate;
++  running_pain_counter = rhs.running_pain_counter;
++  running_pain_counter_turnover = rhs. running_pain_counter_turnover;
+  
+   underwater = rhs.underwater;
+   oxygen = rhs.oxygen;
+***************
+*** 225,230 ****
+--- 242,248 ----
+   dex_cur = dex_max;
+   int_cur = int_max;
+   per_cur = per_max;
++  sta_cur = sta_max;
+  // We can dodge again!
+   dodges_left = 1;
+   blocks_left = 1;
+***************
+*** 263,268 ****
+--- 281,287 ----
+    dex_cur  -=     int((pain - pkill) / 15);
+    per_cur  -=     int((pain - pkill) / 20);
+    int_cur  -= 1 + int((pain - pkill) / 25);
++   sta_cur  -=     int((pain - pkill) / 15);
+   }
+  // Morale
+   if (abs(morale_level()) >= 100) {
+***************
+*** 270,275 ****
+--- 289,295 ----
+    dex_cur  += int(morale_level() / 200);
+    per_cur  += int(morale_level() / 125);
+    int_cur  += int(morale_level() / 100);
++   sta_cur  += int(morale_level() / 100);
+   }
+  // Radiation
+   if (radiation > 0) {
+***************
+*** 277,291 ****
+--- 297,314 ----
+    dex_cur  -= int(radiation / 110);
+    per_cur  -= int(radiation / 100);
+    int_cur  -= int(radiation / 120);
++   sta_cur  -= int(radiation / 100);
+   }
+  // Stimulants
+   dex_cur += int(stim / 10);
+   per_cur += int(stim /  7);
+   int_cur += int(stim /  6);
++  sta_cur += int(stim /  6);
+   if (stim >= 30) {
+    dex_cur -= int(abs(stim - 15) /  8);
+    per_cur -= int(abs(stim - 15) / 12);
+    int_cur -= int(abs(stim - 15) / 14);
++   sta_cur -= int(abs(stim - 15) / 14);
+   }
+  
+  // Set our scent towards the norm
+***************
+*** 447,452 ****
+--- 470,476 ----
+    if (movecost < 100)
+     movecost = 100;
+   }
++  movecost -= running_speed_increase();
+   if (hp_cur[hp_leg_l] == 0)
+    movecost += 50;
+   else if (hp_cur[hp_leg_l] < 40)
+***************
+*** 487,492 ****
+--- 511,517 ----
+  int player::swim_speed()
+  {
+    int ret = 440 + 2 * weight_carried() - 50 * skillLevel("swimming").level();
++   ret -= running_speed_increase() * 5;
+   if (has_trait(PF_WEBBED))
+    ret -= 60 + str_cur * 5;
+   if (has_trait(PF_TAIL_FIN))
+***************
+*** 510,515 ****
+--- 535,580 ----
+   return ret;
+  }
+  
++ float player::max_tired()
++ {
++   return 1000 * sta_cur;
++ } 
++ 
++ int player::recovery_rate(bool resting)
++ {//recovery_rate is called once per turn, + 1 time if sitting still.
++   if (resting == false)
++     return sta_cur * 10;
++   else if (resting == true)
++     return sta_cur * 8;
++ }
++ 
++ int player::running_tired_increase()
++ {
++   return running_intensity * 2.5 + (50 * (weight_carried() + 1) / weight_capacity()) ;
++ }
++ 
++ int player::running_speed_increase()
++ {
++   // use str, sta, encumbrance and weight  
++   //encumb(body_part bp) weight_carried() weight_capacity() 
++   //volume_carried() volume_capacity() tired running_intensity(1-10)
++     int speedplus;
++   
++     //currently using as cost decrease, see run_cost(int base cost)
++ 
++     speedplus = ((running_intensity) * ((str_cur * 9) + sta_cur * 7 * (dex_cur / 8)));
++     speedplus = int(speedplus / 200) - 29;
++     speedplus -= pow((tired + 1) / (max_tired()), 2) * 80;
++     speedplus -= pow((weight_carried() + 1) / (weight_capacity()), 2) * 80;
++     return speedplus;
++ }
++ 
++ int player::sta_xp_plus(int stamax)
++ {
++   return stamax * 625;
++ }                                                             
++ 
++ 
+  nc_color player::color()
+  {
+   if (has_disease(DI_ONFIRE))
+***************
+*** 532,541 ****
+   int inveh;
+   int styletmp;
+   dump >> posx >> posy >> str_cur >> str_max >> dex_cur >> dex_max >>
+!          int_cur >> int_max >> per_cur >> per_max >> power_level >>
+!          max_power_level >> hunger >> thirst >> fatigue >> stim >>
+           pain >> pkill >> radiation >> cash >> recoil >> driving_recoil >>
+!          inveh >> scent >> moves >> underwater >> dodges_left >> blocks_left >>
+           oxygen >> active_mission >> xp_pool >> male >> health >> styletmp;
+  
+   activity.load_info(dump);
+--- 597,606 ----
+   int inveh;
+   int styletmp;
+   dump >> posx >> posy >> str_cur >> str_max >> dex_cur >> dex_max >>
+!    int_cur >> int_max >> per_cur >> per_max >> sta_cur >> sta_max >> sta_xp >> power_level >>
+!    max_power_level >> hunger >> thirst >> fatigue >> tired >> stim >>
+           pain >> pkill >> radiation >> cash >> recoil >> driving_recoil >>
+!    inveh >> scent >> running_intensity >> step_rate >> running_pain_counter >> running_pain_counter_turnover >>  moves >> underwater >> dodges_left >> blocks_left >>
+           oxygen >> active_mission >> xp_pool >> male >> health >> styletmp;
+  
+   activity.load_info(dump);
+***************
+*** 635,645 ****
+   std::stringstream dump;
+   dump << posx    << " " << posy    << " " << str_cur << " " << str_max << " " <<
+           dex_cur << " " << dex_max << " " << int_cur << " " << int_max << " " <<
+!          per_cur << " " << per_max << " " << power_level << " " <<
+!          max_power_level << " " << hunger << " " << thirst << " " << fatigue <<
+           " " << stim << " " << pain << " " << pkill << " " << radiation <<
+!          " " << cash << " " << recoil << " " << driving_recoil << " " <<
+!          (in_vehicle? 1 : 0) << " " << scent << " " << moves << " " <<
+           underwater << " " << dodges_left << " " << blocks_left << " " <<
+           oxygen << " " << active_mission << " " << xp_pool << " " << male <<
+           " " << health << " " << style_selected << " " << activity.save_info() <<
+--- 700,710 ----
+   std::stringstream dump;
+   dump << posx    << " " << posy    << " " << str_cur << " " << str_max << " " <<
+           dex_cur << " " << dex_max << " " << int_cur << " " << int_max << " " <<
+!    per_cur << " " << per_max << " " << sta_cur << " " << sta_max << " " << sta_xp << " " << power_level << " " <<
+!    max_power_level << " " << hunger << " " << thirst << " " << fatigue << " " << tired <<
+           " " << stim << " " << pain << " " << pkill << " " << radiation <<
+!    " " << cash << " " << recoil << " " << driving_recoil << " " << 
+!    (in_vehicle? 1 : 0) << " " << scent << " " << running_intensity << " " << step_rate << " " << running_pain_counter << " " << running_pain_counter_turnover << " " << moves << " " <<
+           underwater << " " << dodges_left << " " << blocks_left << " " <<
+           oxygen << " " << active_mission << " " << xp_pool << " " << male <<
+           " " << health << " " << style_selected << " " << activity.save_info() <<
+***************
+*** 763,772 ****
+--- 828,839 ----
+    int dexbonus = int(stim / 10);
+    int perbonus = int(stim /  7);
+    int intbonus = int(stim /  6);
++   int stabonus = int(stim /  6);
+    if (abs(stim) >= 30) {
+     dexbonus -= int(abs(stim - 15) /  8);
+     perbonus -= int(abs(stim - 15) / 12);
+     intbonus -= int(abs(stim - 15) / 14);
++    stabonus -= int(abs(stim - 15) / 14);
+    }
+  
+    if (dexbonus < 0)
+***************
+*** 777,783 ****
+    stim_text << "Speed +" << stim << "   Intelligence " <<
+                 (intbonus > 0 ? "+ " : "") << intbonus << "   Perception " <<
+                 (perbonus > 0 ? "+ " : "") << perbonus << "   Dexterity "  <<
+!                (dexbonus > 0 ? "+ " : "") << dexbonus;
+    effect_text.push_back(stim_text.str());
+   } else if (stim < 0) {
+    effect_name.push_back("Depressants");
+--- 844,851 ----
+    stim_text << "Speed +" << stim << "   Intelligence " <<
+                 (intbonus > 0 ? "+ " : "") << intbonus << "   Perception " <<
+                 (perbonus > 0 ? "+ " : "") << perbonus << "   Dexterity "  <<
+!                (dexbonus > 0 ? "+ " : "") << dexbonus << "   Stamina " <<
+!                (stabonus > 0 ? "+ " : "") << stabonus;
+    effect_text.push_back(stim_text.str());
+   } else if (stim < 0) {
+    effect_name.push_back("Depressants");
+***************
+*** 785,793 ****
+    int dexpen = int(stim / 10);
+    int perpen = int(stim /  7);
+    int intpen = int(stim /  6);
+  // Since dexpen etc. are always less than 0, no need for + signs
+    stim_text << "Speed " << stim << "   Intelligence " << intpen <<
+!                "   Perception " << perpen << "   Dexterity " << dexpen;
+    effect_text.push_back(stim_text.str());
+   }
+  
+--- 853,862 ----
+    int dexpen = int(stim / 10);
+    int perpen = int(stim /  7);
+    int intpen = int(stim /  6);
++   int stapen = int(stim /  6);
+  // Since dexpen etc. are always less than 0, no need for + signs
+    stim_text << "Speed " << stim << "   Intelligence " << intpen <<
+!     "   Perception " << perpen << "   Dexterity " << dexpen << "   Stamina " << stapen;
+    effect_text.push_back(stim_text.str());
+   }
+  
+***************
+*** 855,860 ****
+--- 924,931 ----
+             (int_max < 10 ? "     "     : "    "),     int_max);
+   mvwprintz(w_stats, 5,  2, c_ltgray, "Perception:%s(%d)",
+             (per_max < 10 ? "       "   : "      "),   per_max);
++  mvwprintz(w_stats, 6,  2, c_ltgray, "Stamina:%s(%d)",
++            (sta_max < 10 ? "          "   : "         "),   sta_max);
+  
+   nc_color status = c_white;
+  
+***************
+*** 914,919 ****
+--- 985,1004 ----
+    status = c_green;
+   mvwprintz(w_stats,  5, (per_cur < 10 ? 17 : 16), status, "%d", per_cur);
+  
++  if (sta_cur <= 0)
++   status = c_dkgray;
++  else if (sta_cur < sta_max / 2)
++   status = c_red;
++  else if (sta_cur < sta_max)
++   status = c_ltred;
++  else if (sta_cur == sta_max)
++   status = c_white;
++  else if (sta_cur < sta_max * 1.5)
++   status = c_ltgreen;
++  else
++   status = c_green;
++  mvwprintz(w_stats,  6, (sta_cur < 10 ? 17 : 16), status, "%d", sta_cur);
++ 
+   wrefresh(w_stats);
+  
+  // Next, draw encumberment.
+***************
+*** 1131,1149 ****
+      mvwprintz(w_info, 0, 0, c_magenta, "\
+  Perception is the most important stat for ranged combat. It's also used for\n\
+  detecting traps and other things of interest.");
+     }
+     wrefresh(w_stats);
+     wrefresh(w_info);
+     switch (input()) {
+      case 'j':
+       line++;
+!      if (line == 4)
+        line = 0;
+       break;
+      case 'k':
+       line--;
+       if (line == -1)
+!       line = 3;
+       break;
+      case '\t':
+       mvwprintz(w_stats, 0, 0, c_ltgray, "          STATS           ");
+--- 1216,1238 ----
+      mvwprintz(w_info, 0, 0, c_magenta, "\
+  Perception is the most important stat for ranged combat. It's also used for\n\
+  detecting traps and other things of interest.");
++    } else if (line == 4) {
++     mvwprintz(w_stats, 6, 2, h_ltgray, "Stamina:");
++     mvwprintz(w_info, 0, 0, c_magenta, "Stamina determines your ability to perform actions without tiring, including your ability to run long distances.");
++ 
+     }
+     wrefresh(w_stats);
+     wrefresh(w_info);
+     switch (input()) {
+      case 'j':
+       line++;
+!      if (line == 5)
+        line = 0;
+       break;
+      case 'k':
+       line--;
+       if (line == -1)
+!       line = 4;
+       break;
+      case '\t':
+       mvwprintz(w_stats, 0, 0, c_ltgray, "          STATS           ");
+***************
+*** 1159,1164 ****
+--- 1248,1254 ----
+     mvwprintz(w_stats, 3, 2, c_ltgray, "Dexterity:");
+     mvwprintz(w_stats, 4, 2, c_ltgray, "Intelligence:");
+     mvwprintz(w_stats, 5, 2, c_ltgray, "Perception:");
++    mvwprintz(w_stats, 6, 2, c_ltgray, "Stamina:");
+     wrefresh(w_stats);
+     break;
+    case 2:	// Encumberment tab
+***************
+*** 1582,1587 ****
+--- 1672,1691 ----
+   else if (fatigue > 191)
+    mvwprintz(w, 2, 30, c_yellow, "Tired");
+  
++  nc_color statuscolor;
++  float tiredpercent = tired / max_tired();
++  if (tiredpercent < .25) statuscolor = c_white;
++  else if (tiredpercent < .5) statuscolor = c_green;
++  else if (tiredpercent < .75) statuscolor = c_yellow;
++  else if (tiredpercent < 100) statuscolor = c_red;
++ 
++  if (running_intensity > 75) mvwprintz(w, 2, 34, statuscolor,      "Sprint");       
++  else if (running_intensity > 50) mvwprintz(w, 2, 34, statuscolor, "Run   ");       
++  else if (running_intensity > 25) mvwprintz(w, 2, 34, statuscolor, "Jog   ");       
++  else if (running_intensity > 0) mvwprintz(w, 2, 34, statuscolor,  "Walk  ");   
++  mvwprintz(w, 4, 26, c_white, "MC:%d", run_cost(100));
++ 
++ 
+   mvwprintz(w, 2, 41, c_white, "XP: ");
+   nc_color col_xp = c_dkgray;
+   if (xp_pool >= 100)
+***************
+*** 1672,1678 ****
+    }
+   } else {  // Not in vehicle
+    nc_color col_str = c_white, col_dex = c_white, col_int = c_white,
+!            col_per = c_white, col_spd = c_white;
+    if (str_cur < str_max)
+     col_str = c_red;
+    if (str_cur > str_max)
+--- 1776,1782 ----
+    }
+   } else {  // Not in vehicle
+    nc_color col_str = c_white, col_dex = c_white, col_int = c_white,
+!     col_per = c_white, col_sta = c_white, col_spd = c_white;
+    if (str_cur < str_max)
+     col_str = c_red;
+    if (str_cur > str_max)
+***************
+*** 1689,1694 ****
+--- 1793,1802 ----
+     col_per = c_red;
+    if (per_cur > per_max)
+     col_per = c_green;
++   if (sta_cur < sta_max)
++     col_sta = c_red;
++   if (sta_cur > sta_max)
++     col_sta = c_green;
+    int spd_cur = current_speed();
+    if (current_speed() < 100)
+     col_spd = c_red;
+***************
+*** 1699,1704 ****
+--- 1807,1813 ----
+    mvwprintz(w, 3, 20, col_dex, "Dex %s%d", dex_cur >= 10 ? "" : " ", dex_cur);
+    mvwprintz(w, 3, 27, col_int, "Int %s%d", int_cur >= 10 ? "" : " ", int_cur);
+    mvwprintz(w, 3, 34, col_per, "Per %s%d", per_cur >= 10 ? "" : " ", per_cur);
++   mvwprintz(w, 3, 41, col_sta, "Sta %s%d", sta_cur >= 10 ? "" : " ", sta_cur);
+    mvwprintz(w, 3, 41, col_spd, "Spd %s%d", spd_cur >= 10 ? "" : " ", spd_cur);
+   }
+  }
+***************
+*** 1979,1984 ****
+--- 2088,2095 ----
+  void player::pause(game *g)
+  {
+   moves = 0;
++  tired -= recovery_rate(1);
++  sta_xp -= 50;
+   if (recoil > 0) {
+     if (str_cur + 2 * skillLevel("gun").level() >= recoil)
+     recoil = 0;
+Only in Cataclysm-DDA-feb20modded/: player.cpp~
+diff -c Cataclysm-DDA-feb20/player.h Cataclysm-DDA-feb20modded/player.h
+*** Cataclysm-DDA-feb20/player.h	2013-02-24 17:20:23.744761894 -0600
+--- Cataclysm-DDA-feb20modded/player.h	2013-02-25 13:54:42.647629930 -0600
+***************
+*** 65,70 ****
+--- 65,77 ----
+   int  run_cost(int base_cost); // Adjust base_cost
+   int  swim_speed();	// Our speed when swimming
+  
++  int running_speed_increase();//speed increase from running/walking/slow
++  int running_tired_increase();//tiredness from running/walking
++  float max_tired();//need float for some calculations
++  int recovery_rate(bool resting);//resting is extra for sitting still
++  int sta_xp_plus(int stamax);//when stamina levels up
++ 
++ 
+   bool has_trait(int flag);
+   bool has_mutation(int flag);
+   void toggle_trait(int flag);
+***************
+*** 276,286 ****
+   int mutation_category_level[NUM_MUTATION_CATEGORIES];
+   std::vector<bionic> my_bionics;
+  // Current--i.e. modified by disease, pain, etc.
+!  int str_cur, dex_cur, int_cur, per_cur;
+  // Maximum--i.e. unmodified by disease
+!  int str_max, dex_max, int_max, per_max;
+   int power_level, max_power_level;
+   int hunger, thirst, fatigue, health;
+   bool underwater;
+   int oxygen;
+   unsigned int recoil;
+--- 283,296 ----
+   int mutation_category_level[NUM_MUTATION_CATEGORIES];
+   std::vector<bionic> my_bionics;
+  // Current--i.e. modified by disease, pain, etc.
+!  int str_cur, dex_cur, int_cur, per_cur, sta_cur, sta_xp;
+  // Maximum--i.e. unmodified by disease
+!  int str_max, dex_max, int_max, per_max, sta_max;
+   int power_level, max_power_level;
+   int hunger, thirst, fatigue, health;
++  float tired;
++  float running_intensity, step_rate;
++  int running_pain_counter, running_pain_counter_turnover;
+   bool underwater;
+   int oxygen;
+   unsigned int recoil;
+Only in Cataclysm-DDA-feb20modded/: player.h~
+Common subdirectories: Cataclysm-DDA-feb20/save and Cataclysm-DDA-feb20modded/save
